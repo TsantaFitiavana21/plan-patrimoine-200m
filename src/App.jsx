@@ -85,7 +85,7 @@ const pct = (v) => `${nf2.format(v)} %`;
 
 const DEFAULTS = {
   revenuEur: 1825,
-  taux: 4900,
+  taux: 4800,
   depenses: 1_500_000,
   meubles: 12_000_000,
   meublesMois: 2,
