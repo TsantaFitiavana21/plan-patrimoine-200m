@@ -7,7 +7,7 @@ import {
   Wallet, PiggyBank, ShieldCheck, Target, LayoutDashboard, CalendarRange,
   SlidersHorizontal, Sun, Moon, RotateCcw, TrendingUp, Coins, Landmark,
   Banknote, Flag, ArrowUpRight, Database, Cloud, CloudOff, RefreshCw,
-  CheckCircle2, AlertTriangle, HardDrive, Download, Upload,
+  CheckCircle2, AlertTriangle, HardDrive, Download, Upload, Smile,
 } from "lucide-react";
 
 /* ------------------------------------------------------------------ */
@@ -87,6 +87,7 @@ const DEFAULTS = {
   revenuEur: 1825,
   taux: 4800,
   depenses: 1_500_000,
+  plaisirMensuel: 1_000_000,
   meubles: 12_000_000,
   meublesMois: 2,
   dette: 13_000_000,
@@ -106,7 +107,7 @@ const DEFAULTS = {
 
 function buildPlan(p) {
   const revenuAr = p.revenuEur * p.taux;
-  const epargne = Math.max(0, revenuAr - p.depenses);
+  const epargne = Math.max(0, revenuAr - p.depenses - p.plaisirMensuel);
   const rMensuel = p.datAnnuel / 100 / 12;
   const allocSimple = Math.max(0, 100 - p.allocEuro - p.allocDat);
 
@@ -117,6 +118,8 @@ function buildPlan(p) {
   let simple = 0;
   let eurSolde = 0; // en €
   let capitalVerse = 0; // total investi hors intérêts
+  let verseCumule = 0; // cumul du montant total envoyé chaque mois (meubles+dette+sécurité+investissement)
+  let plaisirCumule = 0; // cumul du budget plaisir mis de côté
 
   const rows = [];
   const MAX = 360;
@@ -139,6 +142,10 @@ function buildPlan(p) {
     }
 
     const vInvest = Math.max(0, dispo);
+
+    const verse = vMeubles + vDette + vSecu + vInvest; // montant exact à envoyer ce mois-ci
+    verseCumule += verse;
+    plaisirCumule += p.plaisirMensuel;
 
     // Intérêts DAT crédités sur le solde d'ouverture
     const interet = datSolde * rMensuel;
@@ -171,6 +178,7 @@ function buildPlan(p) {
       m, label: `M${String(m).padStart(2, "0")}`,
       mois: MOIS_FR[mIdx], annee,
       action, vMeubles, vDette, vSecu, vInvest,
+      verse, verseCumule, plaisirCumule,
       secu, eurSolde, euroAr,
       dat: datSolde, datInterets, datVerse,
       simple, total, capitalVerse,
@@ -560,6 +568,7 @@ export default function App() {
 
   const patrimoine = courant?.total ?? 0;
   const secuActuel = courant?.secu ?? 0;
+  const plaisirActuel = courant?.plaisirCumule ?? 0;
 
   const jalonsList = [
     { id: "j1", titre: "Meubler la maison", detail: `${ar(p.meubles)} au comptant`, mois: plan.moisMeubles, icon: Banknote },
@@ -694,12 +703,15 @@ export default function App() {
         {tab === "dash" && (
           <div className="space-y-6">
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-4">
               <Kpi t={t} icon={Wallet} label="Revenu net mensuel"
                 value={ar(plan.revenuAr)} sub={`${eur(p.revenuEur)} · 1 € = ${nf0.format(p.taux)} Ar`} />
               <Kpi t={t} icon={PiggyBank} label="Capacité d'épargne"
                 value={ar(plan.epargne)}
-                sub={`Dépenses courantes ${ar(p.depenses)}`} />
+                sub={`Dépenses ${ar(p.depenses)} + plaisir ${ar(p.plaisirMensuel)}`} />
+              <Kpi t={t} icon={Smile} label="Portefeuille plaisir"
+                value={ar(plaisirActuel)}
+                sub={`${ar(p.plaisirMensuel)} / mois mis de côté`} />
               <Kpi t={t} icon={ShieldCheck} label="Fonds de sécurité"
                 value={ar(secuActuel)}
                 sub={`Cible ${ar(p.securiteCible)} — hors objectif`}
@@ -964,7 +976,7 @@ export default function App() {
               <table className="w-full border-collapse">
                 <thead className="sticky top-0 z-10">
                   <tr style={{ background: t.panel2 }}>
-                    {["Mois", "Année", "Statut", "Action / priorité", "Fonds sécurité",
+                    {["Mois", "Année", "Statut", "Action / priorité", "Montant à envoyer", "Cumul envoyé", "Fonds sécurité",
                       "Euros Deel", "Équiv. Deel (Ar)", "DAT + intérêts", "Épargne simple",
                       "Total portefeuille", "Progression"].map((h, i) => (
                       <th key={i} className={th}
@@ -987,6 +999,8 @@ export default function App() {
                             onChange={(v) => setStatuts({ ...statuts, [r.m]: v })} />
                         </td>
                         <td className={`${td} font-medium`}>{r.action}</td>
+                        <td className={`${td} font-bold`} style={{ color: t.accent }}>{ar(r.verse)}</td>
+                        <td className={td} style={{ color: t.muted }}>{ar(r.verseCumule)}</td>
                         <td className={td} style={{ color: r.secu >= p.securiteCible ? t.accent : t.text }}>
                           {ar(r.secu)}
                         </td>
@@ -1051,6 +1065,10 @@ export default function App() {
                   <Field t={t} label="Dépenses de vie courante" hint={ar(p.depenses)}>
                     <Slider t={t} value={p.depenses} min={0} max={8_000_000} step={50_000} onChange={set("depenses")} />
                     <div className="mt-2"><NumInput t={t} value={p.depenses} onChange={set("depenses")} suffix="Ar" step={50000} /></div>
+                  </Field>
+                  <Field t={t} label="Budget plaisir mensuel" hint={ar(p.plaisirMensuel)}>
+                    <Slider t={t} value={p.plaisirMensuel} min={0} max={5_000_000} step={50_000} onChange={set("plaisirMensuel")} />
+                    <div className="mt-2"><NumInput t={t} value={p.plaisirMensuel} onChange={set("plaisirMensuel")} suffix="Ar" step={50000} /></div>
                   </Field>
                   <Field t={t} label="Rendement du DAT" hint={`${nf2.format(p.datAnnuel)} % / an · ${nf2.format(plan.rMensuel * 100)} % / mois`}>
                     <Slider t={t} value={p.datAnnuel} min={0} max={20} step={0.25} onChange={set("datAnnuel")} />
@@ -1315,6 +1333,7 @@ create policy "acces profil anon" on ${cfg.table || "plan_patrimoine"}
 
         <footer className="mt-8 text-xs text-center" style={{ color: t.muted }}>
           Projection indicative. Le fonds de sécurité de {ar(p.securiteCible)} est compté à part de l'objectif de {ar(p.objectif)}.
+          Un budget plaisir de {ar(p.plaisirMensuel)}/mois est mis de côté avant le calcul de l'épargne investie.
           Rendement DAT supposé constant à {nf2.format(p.datAnnuel)} %/an, hors fiscalité et hors variation du taux de change.
         </footer>
       </div>
